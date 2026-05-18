@@ -955,7 +955,7 @@ async function loadMovies() {
   if (state.genreFilter) params.set('genre', state.genreFilter);
 
   const data = await fetch(`/api/movies?${params}`).then(r => r.json());
-  state.movies = data.movies;
+  state.movies = data.movies || [];
   renderMovieList();
 }
 
