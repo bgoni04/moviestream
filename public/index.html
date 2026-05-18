@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MovieStream — MongoDB Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a25;
+    --border: #2a2a3a;
+    --accent: #e8c56e;
+    --accent2: #7b5ea7;
+    --accent3: #4a9eff;
+    --text: #e8e8f0;
+    --text2: #888899;
+    --text3: #555566;
+    --danger: #ff4d6d;
+    --success: #4ade80;
+    --mono: 'DM Mono', monospace;
+    --serif: 'DM Serif Display', serif;
+    --sans: 'DM Sans', sans-serif;
+    --radius: 6px;
+    --transition: 180ms ease;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* GRAIN OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--serif);
+    font-size: 22px;
+    letter-spacing: 0.02em;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo span {
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-style: italic;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+  }
+
+  .logo-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 2s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+  }
+
+  /* NAV TABS */
+  nav {
+    display: flex;
+    gap: 2px;
+    background: var(--bg);
+    padding: 2px;
+    border-radius: var(--radius);
+  }
+
+  nav button {
+    padding: 7px 16px;
+    background: none;
+    border: none;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all var(--transition);
+    text-transform: uppercase;
+  }
+
+  nav button.active { background: var(--surface2); color: var(--accent); }
+  nav button:hover:not(.active) { color: var(--text); background: var(--surface2); }
+
+  /* STATS BAR */
+  .stats-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .stat {
+    flex: 1;
+    padding: 14px 24px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .stat:last-child { border-right: none; }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--accent);
+    transition: all 0.3s;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* MAIN LAYOUT */
+  main { display: flex; height: calc(100vh - 104px); overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 300px;
+    min-width: 300px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .sidebar-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sidebar-header h2 {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .search-wrap {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+  }
+
+  input[type="text"], input[type="number"], input[type="email"], textarea, select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    font-family: var(--sans);
+    font-size: 13px;
+    width: 100%;
+    transition: border var(--transition);
+    outline: none;
+  }
+
+  input:focus, textarea:focus, select:focus { border-color: var(--accent2); }
+  textarea { resize: vertical; min-height: 80px; }
+  select option { background: var(--surface2); }
+
+  /* FILTER CHIPS */
+  .filter-row {
+    padding: 10px 16px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .chip {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-family: var(--mono);
+    cursor: pointer;
+    border: 1px solid var(--border);
+    color: var(--text2);
+    background: none;
+    transition: all var(--transition);
+  }
+
+  .chip:hover, .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(232,197,110,0.08); }
+
+  /* LIST */
+  .list { overflow-y: auto; flex: 1; }
+
+  .list-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background var(--transition);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .list-item:hover { background: var(--surface2); }
+  .list-item.selected { background: var(--surface2); border-left: 2px solid var(--accent); }
+
+  .item-poster {
+    width: 38px;
+    height: 54px;
+    border-radius: 3px;
+    object-fit: cover;
+    background: var(--surface2);
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+  }
+
+  .item-poster-placeholder {
+    width: 38px;
+    height: 54px;
+    border-radius: 3px;
+    background: var(--surface2);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text3);
+    font-size: 18px;
+    border: 1px solid var(--border);
+  }
+
+  .item-body { flex: 1; min-width: 0; }
+
+  .item-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .item-meta {
+    font-size: 11px;
+    color: var(--text2);
+    font-family: var(--mono);
+    margin-top: 3px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .badge {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 500;
+  }
+
+  .badge-genre { background: rgba(123,94,167,0.2); color: #b09fd5; border: 1px solid rgba(123,94,167,0.3); }
+  .badge-rating { background: rgba(232,197,110,0.15); color: var(--accent); }
+  .badge-year { background: rgba(74,158,255,0.15); color: var(--accent3); }
+
+  .rating-star { color: var(--accent); }
+
+  /* DETAIL PANEL */
+  .detail {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .detail-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text3);
+    gap: 12px;
+  }
+
+  .detail-empty .big { font-family: var(--serif); font-size: 48px; opacity: 0.2; }
+  .detail-empty p { font-size: 13px; font-family: var(--mono); }
+
+  .detail-header {
+    padding: 24px 32px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .detail-poster {
+    width: 80px;
+    height: 112px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    flex-shrink: 0;
+  }
+
+  .detail-poster-placeholder {
+    width: 80px;
+    height: 112px;
+    border-radius: 4px;
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text3);
+    font-size: 32px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+  }
+
+  .detail-title-area { flex: 1; }
+
+  .detail-title {
+    font-family: var(--serif);
+    font-size: 26px;
+    line-height: 1.2;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .detail-meta-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .detail-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  /* BUTTONS */
+  .btn {
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all var(--transition);
+    text-transform: uppercase;
+  }
+
+  .btn-primary { background: var(--accent); color: #1a1200; }
+  .btn-primary:hover { background: #f0d080; }
+  .btn-secondary { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--text2); color: var(--text); }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid rgba(255,77,109,0.3); }
+  .btn-danger:hover { background: rgba(255,77,109,0.1); }
+  .btn-icon { padding: 6px 10px; font-size: 14px; }
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+
+  /* DETAIL BODY */
+  .detail-body { padding: 24px 32px; flex: 1; }
+
+  .section { margin-bottom: 28px; }
+
+  .section-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .detail-description { line-height: 1.7; color: var(--text2); font-size: 13px; }
+
+  .cast-list { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .cast-pill {
+    padding: 5px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 12px;
+    color: var(--text2);
+    display: flex;
+    gap: 6px;
+  }
+
+  .cast-pill strong { color: var(--text); font-weight: 500; }
+
+  .genre-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .rating-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .rating-item {
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .rating-score {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--accent);
+    min-width: 28px;
+    text-align: center;
+  }
+
+  .rating-review { font-size: 12px; color: var(--text2); line-height: 1.5; }
+  .rating-date { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
+
+  /* MODAL / FORM PANEL */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 540px;
+    max-width: 95vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.2s ease;
+  }
+
+  @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+  .modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .modal-title { font-family: var(--serif); font-size: 20px; }
+
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--text2);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    transition: color var(--transition);
+  }
+
+  .modal-close:hover { color: var(--text); }
+
+  .modal-body { padding: 20px 24px; overflow-y: auto; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text2);
+    margin-bottom: 6px;
+  }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .genre-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .genre-check-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text2);
+    transition: all var(--transition);
+  }
+
+  .genre-check-label:has(input:checked),
+  .genre-check-label.checked {
+    border-color: var(--accent2);
+    background: rgba(123,94,167,0.15);
+    color: var(--text);
+  }
+
+  .genre-check-label input { accent-color: var(--accent2); }
+
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  /* TOAST */
+  .toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .toast {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 12px 18px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--text);
+    animation: toastIn 0.2s ease;
+    min-width: 220px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toast.success { border-color: rgba(74,222,128,0.4); }
+  .toast.error { border-color: rgba(255,77,109,0.4); }
+  .toast.success::before { content: '✓'; color: var(--success); }
+  .toast.error::before { content: '✕'; color: var(--danger); }
+
+  @keyframes toastIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+
+  /* USERS SPECIFIC */
+  .user-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--text2);
+    flex-shrink: 0;
+    font-family: var(--mono);
+    font-weight: 500;
+  }
+
+  .history-list { display: flex; flex-direction: column; gap: 6px; }
+
+  .history-item {
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+
+  .history-progress {
+    width: 80px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .history-progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.5s; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+  /* LOADING */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--text3);
+    font-family: var(--mono);
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ADD BUTTON FAB */
+  .add-btn {
+    padding: 6px 14px;
+    background: rgba(232,197,110,0.1);
+    border: 1px solid rgba(232,197,110,0.3);
+    color: var(--accent);
+    border-radius: var(--radius);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    letter-spacing: 0.04em;
+  }
+
+  .add-btn:hover { background: rgba(232,197,110,0.18); border-color: var(--accent); }
+
+  /* PAGE SECTION */
+  .page { display: none; }
+  .page.active { display: flex; width: 100%; height: 100%; overflow: hidden; }
+
+  .mongo-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(74,158,255,0.1);
+    border: 1px solid rgba(74,158,255,0.25);
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent3);
+    letter-spacing: 0.04em;
+  }
+
+  .info-box {
+    padding: 12px 16px;
+    background: rgba(123,94,167,0.08);
+    border: 1px solid rgba(123,94,167,0.2);
+    border-radius: var(--radius);
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.6;
+    margin-bottom: 16px;
+    font-family: var(--mono);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    MovieStream
+    <span>MongoDB Explorer</span>
+  </div>
+  <nav>
+    <button class="active" onclick="switchPage('movies')">Movies</button>
+    <button onclick="switchPage('genres')">Genres</button>
+    <button onclick="switchPage('users')">Users</button>
+  </nav>
+</header>
+
+<div class="stats-bar" id="statsBar">
+  <div class="stat"><span class="stat-value" id="statMovies">—</span><span class="stat-label">Movies</span></div>
+  <div class="stat"><span class="stat-value" id="statGenres">—</span><span class="stat-label">Genres</span></div>
+  <div class="stat"><span class="stat-value" id="statUsers">—</span><span class="stat-label">Users</span></div>
+  <div class="stat"><span class="stat-value" id="statRatings">—</span><span class="stat-label">Ratings</span></div>
+</div>
+
+<main>
+
+  <!-- ═══════════════════════════════════ MOVIES PAGE ═══════════════════════ -->
+  <div id="page-movies" class="page active">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>Collection: <span style="color:var(--accent3)">movies</span></h2>
+        <button class="add-btn" onclick="openMovieForm()">+ New</button>
+      </div>
+      <div class="search-wrap">
+        <input type="text" id="movieSearch" placeholder="Search title..." oninput="filterMovies()">
+      </div>
+      <div class="filter-row" id="genreFilters">
+        <button class="chip active" data-genre="" onclick="setGenreFilter(this, '')">All</button>
+      </div>
+      <div class="list" id="movieList"><div class="loading"><div class="spinner"></div> Loading...</div></div>
+    </div>
+    <div class="detail" id="movieDetail">
+      <div class="detail-empty">
+        <div class="big">🎬</div>
+        <p>Select a movie to view details</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ GENRES PAGE ═══════════════════════ -->
+  <div id="page-genres" class="page">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>Collection: <span style="color:var(--accent3)">genres</span></h2>
+        <button class="add-btn" onclick="openGenreForm()">+ New</button>
+      </div>
+      <div class="list" id="genreList"><div class="loading"><div class="spinner"></div> Loading...</div></div>
+    </div>
+    <div class="detail" id="genreDetail">
+      <div class="detail-empty">
+        <div class="big">🏷️</div>
+        <p>Select a genre to view details</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════ USERS PAGE ════════════════════════ -->
+  <div id="page-users" class="page">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>Collection: <span style="color:var(--accent3)">users</span></h2>
+        <button class="add-btn" onclick="openUserForm()">+ New</button>
+      </div>
+      <div class="search-wrap">
+        <input type="text" id="userSearch" placeholder="Search username..." oninput="filterUsers()">
+      </div>
+      <div class="list" id="userList"><div class="loading"><div class="spinner"></div> Loading...</div></div>
+    </div>
+    <div class="detail" id="userDetail">
+      <div class="detail-empty">
+        <div class="big">👤</div>
+        <p>Select a user to view details</p>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════ MODALS ══════════════════════════════ -->
+
+<!-- MOVIE FORM MODAL -->
+<div class="modal-overlay" id="movieModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="movieModalTitle">New Movie</span>
+      <button class="modal-close" onclick="closeModal('movieModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-box">Genres se embeben directamente en el documento de la película. <br>Al guardar, se copian nombre + _id del catálogo de géneros.</div>
+      <input type="hidden" id="movieId">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Title *</label>
+          <input type="text" id="movieTitle" placeholder="Movie title">
+        </div>
+        <div class="form-row" style="grid-template-columns:1fr 1fr; gap:8px; width:100%;">
+          <div class="form-group">
+            <label>Year *</label>
+            <input type="number" id="movieYear" placeholder="2024" min="1900" max="2030">
+          </div>
+          <div class="form-group">
+            <label>Duration (min)</label>
+            <input type="number" id="movieDuration" placeholder="120">
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="movieDesc" rows="3" placeholder="Plot summary..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Poster URL</label>
+        <input type="text" id="moviePoster" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label>Genres <span class="mongo-badge">embedded []</span></label>
+        <div class="genre-checkboxes" id="genreCheckboxes"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('movieModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMovie()">Save Movie</button>
+    </div>
+  </div>
+</div>
+
+<!-- GENRE FORM MODAL -->
+<div class="modal-overlay" id="genreModal">
+  <div class="modal" style="width:380px">
+    <div class="modal-header">
+      <span class="modal-title" id="genreModalTitle">New Genre</span>
+      <button class="modal-close" onclick="closeModal('genreModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-box">Al renombrar un género, se actualiza también en todos los documentos de movies que lo embeben (updateMany cascade).</div>
+      <input type="hidden" id="genreId">
+      <div class="form-group">
+        <label>Name *</label>
+        <input type="text" id="genreName" placeholder="e.g. Horror">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('genreModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveGenre()">Save Genre</button>
+    </div>
+  </div>
+</div>
+
+<!-- USER FORM MODAL -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <span class="modal-title" id="userModalTitle">New User</span>
+      <button class="modal-close" onclick="closeModal('userModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="userId">
+      <div class="form-group">
+        <label>Username *</label>
+        <input type="text" id="userUsername" placeholder="username">
+      </div>
+      <div class="form-group">
+        <label>Email *</label>
+        <input type="email" id="userEmail" placeholder="user@example.com">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('userModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save User</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+// ═══════════════════════════════════════ STATE ════════════════════════════════
+let state = {
+  movies: [], genres: [], users: [],
+  selectedMovie: null, selectedGenre: null, selectedUser: null,
+  genreFilter: '',
+  currentPage: 'movies'
+};
+
+// ═══════════════════════════════════════ UTILITIES ════════════════════════════
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function fmtDate(d) { return d ? new Date(d).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : ''; }
+
+function stars(n) { return n ? `⭐ ${Number(n).toFixed(1)}` : '—'; }
+
+// ═══════════════════════════════════════ NAVIGATION ═══════════════════════════
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b => {
+    if (b.textContent.toLowerCase() === name) b.classList.add('active');
+  });
+  state.currentPage = name;
+}
+
+// ═══════════════════════════════════════ STATS ════════════════════════════════
+async function loadStats() {
+  const data = await fetch('/api/stats').then(r => r.json());
+  document.getElementById('statMovies').textContent = data.movieCount;
+  document.getElementById('statGenres').textContent = data.genreCount;
+  document.getElementById('statUsers').textContent = data.userCount;
+  document.getElementById('statRatings').textContent = data.ratingCount;
+}
+
+// ═══════════════════════════════════════ MOVIES ═══════════════════════════════
+async function loadMovies() {
+  const search = document.getElementById('movieSearch').value;
+  const params = new URLSearchParams({ limit: 100 });
+  if (search) params.set('search', search);
+  if (state.genreFilter) params.set('genre', state.genreFilter);
+
+  const data = await fetch(`/api/movies?${params}`).then(r => r.json());
+  state.movies = data.movies;
+  renderMovieList();
+}
+
+async function loadGenresForFilters() {
+  const genres = await fetch('/api/genres').then(r => r.json());
+  state.genres = genres;
+
+  const container = document.getElementById('genreFilters');
+  container.innerHTML = `<button class="chip active" data-genre="" onclick="setGenreFilter(this,'')">All</button>`;
+  genres.forEach(g => {
+    const btn = document.createElement('button');
+    btn.className = 'chip';
+    btn.dataset.genre = g.name;
+    btn.textContent = g.name;
+    btn.onclick = () => setGenreFilter(btn, g.name);
+    container.appendChild(btn);
+  });
+}
+
+function setGenreFilter(el, genre) {
+  document.querySelectorAll('#genreFilters .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  state.genreFilter = genre;
+  loadMovies();
+}
+
+function filterMovies() { loadMovies(); }
+
+function renderMovieList() {
+  const list = document.getElementById('movieList');
+  if (!state.movies.length) {
+    list.innerHTML = '<div class="loading" style="color:var(--text3)">No movies found</div>';
+    return;
+  }
+  list.innerHTML = state.movies.map(m => `
+    <div class="list-item ${state.selectedMovie?._id === m._id ? 'selected' : ''}" onclick="selectMovie('${m._id}')">
+      ${m.poster_url
+        ? `<img class="item-poster" src="${m.poster_url}" alt="${m.title}" onerror="this.style.display='none'">`
+        : `<div class="item-poster-placeholder">🎬</div>`}
+      <div class="item-body">
+        <div class="item-title">${m.title}</div>
+        <div class="item-meta">
+          <span class="badge badge-year">${m.year}</span>
+          ${m.genres?.slice(0,2).map(g => `<span class="badge badge-genre">${g.name}</span>`).join('')}
+        </div>
+        <div class="item-meta" style="margin-top:3px">
+          <span class="rating-star">${stars(m.avg_rating)}</span>
+          ${m.duration_min ? `<span style="color:var(--text3)">${m.duration_min}m</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function selectMovie(id) {
+  const data = await fetch(`/api/movies/${id}`).then(r => r.json());
+  state.selectedMovie = data;
+  document.querySelectorAll('#movieList .list-item').forEach(el => {
+    el.classList.toggle('selected', el.onclick.toString().includes(id));
+  });
+  renderMovieDetail(data);
+}
+
+function renderMovieDetail(m) {
+  const panel = document.getElementById('movieDetail');
+  panel.innerHTML = `
+    <div class="detail-header">
+      ${m.poster_url
+        ? `<img class="detail-poster" src="${m.poster_url}" alt="${m.title}" onerror="this.style.display='none'">`
+        : `<div class="detail-poster-placeholder">🎬</div>`}
+      <div class="detail-title-area">
+        <div class="detail-title">${m.title}</div>
+        <div class="detail-meta-row">
+          <span class="badge badge-year">${m.year}</span>
+          ${m.duration_min ? `<span class="badge" style="background:rgba(255,255,255,0.06);color:var(--text2)">${m.duration_min} min</span>` : ''}
+          ${m.genres?.map(g => `<span class="badge badge-genre">${g.name}</span>`).join('')}
+        </div>
+        <div class="detail-meta-row">
+          <span style="font-family:var(--mono);font-size:18px;color:var(--accent)">${m.avg_rating ? `⭐ ${Number(m.avg_rating).toFixed(1)}` : 'No ratings yet'}</span>
+          ${m.rating_count ? `<span style="font-size:11px;color:var(--text3);font-family:var(--mono)">${m.rating_count} ratings</span>` : ''}
+        </div>
+        <div class="detail-actions">
+          <button class="btn btn-primary btn-sm" onclick="openMovieForm('${m._id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMovie('${m._id}')">Delete</button>
+        </div>
+      </div>
+    </div>
+    <div class="detail-body">
+      ${m.description ? `
+        <div class="section">
+          <div class="section-title">Synopsis</div>
+          <p class="detail-description">${m.description}</p>
+        </div>` : ''}
+
+      ${m.enrichedCast?.length ? `
+        <div class="section">
+          <div class="section-title">Cast <span class="mongo-badge">cast[] in movie doc</span></div>
+          <div class="cast-list">
+            ${m.enrichedCast.map(c => `
+              <div class="cast-pill">
+                <strong>${c.actor?.name || 'Unknown'}</strong>
+                ${c.role ? `<span style="color:var(--text3)">as ${c.role}</span>` : ''}
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+
+      ${m.ratings?.length ? `
+        <div class="section">
+          <div class="section-title">Recent Ratings <span class="mongo-badge">ratings collection</span></div>
+          <div class="rating-list">
+            ${m.ratings.map(r => `
+              <div class="rating-item">
+                <div class="rating-score">${r.score}</div>
+                <div>
+                  <div class="rating-review">${r.review || '<em style="color:var(--text3)">No review</em>'}</div>
+                  <div class="rating-date">${fmtDate(r.created_at)}</div>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>` : '<div class="section"><div class="section-title">Ratings</div><p style="color:var(--text3);font-size:12px;font-family:var(--mono)">No ratings yet.</p></div>'}
+
+      <div class="section">
+        <div class="section-title">Document ID <span class="mongo-badge">ObjectId</span></div>
+        <code style="font-family:var(--mono);font-size:11px;color:var(--text3)">${m._id}</code>
+      </div>
+    </div>
+  `;
+}
+
+async function openMovieForm(id) {
+  // Populate genre checkboxes
+  const genres = await fetch('/api/genres').then(r => r.json());
+  const box = document.getElementById('genreCheckboxes');
+  box.innerHTML = genres.map(g => `
+    <label class="genre-check-label" id="glabel-${g._id}">
+      <input type="checkbox" value="${g._id}" onchange="this.closest('label').classList.toggle('checked',this.checked)">
+      ${g.name}
+    </label>
+  `).join('');
+
+  if (id) {
+    const m = state.movies.find(x => x._id === id) || state.selectedMovie;
+    document.getElementById('movieId').value = m._id;
+    document.getElementById('movieTitle').value = m.title;
+    document.getElementById('movieYear').value = m.year;
+    document.getElementById('movieDuration').value = m.duration_min || '';
+    document.getElementById('movieDesc').value = m.description || '';
+    document.getElementById('moviePoster').value = m.poster_url || '';
+    document.getElementById('movieModalTitle').textContent = 'Edit Movie';
+
+    // Check current genres
+    m.genres?.forEach(g => {
+      const cb = box.querySelector(`input[value="${g._id}"]`);
+      if (cb) { cb.checked = true; cb.closest('label').classList.add('checked'); }
+    });
+  } else {
+    document.getElementById('movieId').value = '';
+    document.getElementById('movieTitle').value = '';
+    document.getElementById('movieYear').value = '';
+    document.getElementById('movieDuration').value = '';
+    document.getElementById('movieDesc').value = '';
+    document.getElementById('moviePoster').value = '';
+    document.getElementById('movieModalTitle').textContent = 'New Movie';
+  }
+  openModal('movieModal');
+}
+
+async function saveMovie() {
+  const id = document.getElementById('movieId').value;
+  const genre_ids = [...document.querySelectorAll('#genreCheckboxes input:checked')].map(c => c.value);
+  const body = {
+    title: document.getElementById('movieTitle').value.trim(),
+    year: Number(document.getElementById('movieYear').value),
+    duration_min: Number(document.getElementById('movieDuration').value) || undefined,
+    description: document.getElementById('movieDesc').value.trim(),
+    poster_url: document.getElementById('moviePoster').value.trim(),
+    genre_ids
+  };
+
+  if (!body.title || !body.year) return toast('Title and year are required', 'error');
+
+  const url = id ? `/api/movies/${id}` : '/api/movies';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+  if (res.ok) {
+    toast(id ? 'Movie updated' : 'Movie created');
+    closeModal('movieModal');
+    await loadMovies();
+    if (id) selectMovie(id);
+    loadStats();
+  } else {
+    const err = await res.json();
+    toast(err.error || 'Error saving', 'error');
+  }
+}
+
+async function deleteMovie(id) {
+  if (!confirm('Delete this movie? This will also delete associated ratings.')) return;
+  const res = await fetch(`/api/movies/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    toast('Movie deleted');
+    state.selectedMovie = null;
+    document.getElementById('movieDetail').innerHTML = '<div class="detail-empty"><div class="big">🎬</div><p>Select a movie to view details</p></div>';
+    await loadMovies();
+    loadStats();
+  } else {
+    const err = await res.json();
+    toast(err.error || 'Error deleting', 'error');
+  }
+}
+
+// ═══════════════════════════════════════ GENRES ═══════════════════════════════
+async function loadGenres() {
+  const genres = await fetch('/api/genres').then(r => r.json());
+  state.genres = genres;
+  renderGenreList();
+}
+
+function renderGenreList() {
+  const list = document.getElementById('genreList');
+  if (!state.genres.length) {
+    list.innerHTML = '<div class="loading" style="color:var(--text3)">No genres</div>';
+    return;
+  }
+  list.innerHTML = state.genres.map(g => `
+    <div class="list-item ${state.selectedGenre?._id === g._id ? 'selected' : ''}" onclick="selectGenre('${g._id}')">
+      <div class="item-poster-placeholder" style="font-size:20px">🏷️</div>
+      <div class="item-body">
+        <div class="item-title">${g.name}</div>
+        <div class="item-meta">
+          <span class="mongo-badge">slug: ${g.slug}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function selectGenre(id) {
+  const genre = state.genres.find(g => g._id === id);
+  state.selectedGenre = genre;
+
+  // Find movies with this genre
+  const data = await fetch(`/api/movies?genre=${encodeURIComponent(genre.name)}&limit=100`).then(r => r.json());
+
+  document.querySelectorAll('#genreList .list-item').forEach(el => {
+    el.classList.toggle('selected', el.onclick.toString().includes(id));
+  });
+
+  const panel = document.getElementById('genreDetail');
+  panel.innerHTML = `
+    <div class="detail-header" style="align-items:center">
+      <div class="detail-poster-placeholder" style="font-size:40px">🏷️</div>
+      <div class="detail-title-area">
+        <div class="detail-title">${genre.name}</div>
+        <div class="detail-meta-row">
+          <span class="mongo-badge">slug: ${genre.slug}</span>
+          <span class="badge badge-year">${data.total} movies</span>
+        </div>
+        <div class="detail-actions">
+          <button class="btn btn-primary btn-sm" onclick="openGenreForm('${genre._id}')">Rename</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteGenre('${genre._id}')">Delete</button>
+        </div>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="section">
+        <div class="section-title">Movies with this genre <span class="mongo-badge">embedded in movies[]</span></div>
+        ${data.movies.length ? data.movies.map(m => `
+          <div class="list-item" style="padding:10px 0;border-bottom:1px solid var(--border)" onclick="switchPage('movies');setTimeout(()=>selectMovie('${m._id}'),100)">
+            <div class="item-body">
+              <div class="item-title">${m.title}</div>
+              <div class="item-meta"><span class="badge badge-year">${m.year}</span> <span>${stars(m.avg_rating)}</span></div>
+            </div>
+          </div>
+        `).join('') : '<p style="color:var(--text3);font-size:12px;font-family:var(--mono)">No movies use this genre.</p>'}
+      </div>
+      <div class="section">
+        <div class="section-title">Document ID</div>
+        <code style="font-family:var(--mono);font-size:11px;color:var(--text3)">${genre._id}</code>
+      </div>
+    </div>
+  `;
+}
+
+function openGenreForm(id) {
+  if (id) {
+    const g = state.genres.find(x => x._id === id);
+    document.getElementById('genreId').value = g._id;
+    document.getElementById('genreName').value = g.name;
+    document.getElementById('genreModalTitle').textContent = 'Rename Genre';
+  } else {
+    document.getElementById('genreId').value = '';
+    document.getElementById('genreName').value = '';
+    document.getElementById('genreModalTitle').textContent = 'New Genre';
+  }
+  openModal('genreModal');
+}
+
+async function saveGenre() {
+  const id = document.getElementById('genreId').value;
+  const name = document.getElementById('genreName').value.trim();
+  if (!name) return toast('Name is required', 'error');
+
+  const url = id ? `/api/genres/${id}` : '/api/genres';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+
+  if (res.ok) {
+    toast(id ? 'Genre renamed (cascade updated in movies)' : 'Genre created');
+    closeModal('genreModal');
+    await loadGenres();
+    await loadGenresForFilters();
+    loadStats();
+    if (id) selectGenre(id);
+  } else {
+    const err = await res.json();
+    toast(err.error || 'Error saving', 'error');
+  }
+}
+
+async function deleteGenre(id) {
+  if (!confirm('Delete this genre? It will fail if movies are using it.')) return;
+  const res = await fetch(`/api/genres/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    toast('Genre deleted');
+    state.selectedGenre = null;
+    document.getElementById('genreDetail').innerHTML = '<div class="detail-empty"><div class="big">🏷️</div><p>Select a genre to view details</p></div>';
+    await loadGenres();
+    await loadGenresForFilters();
+    loadStats();
+  } else {
+    const err = await res.json();
+    toast(err.error || 'Error: ' + err.error, 'error');
+  }
+}
+
+// ═══════════════════════════════════════ USERS ════════════════════════════════
+async function loadUsers() {
+  const search = document.getElementById('userSearch').value;
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  const users = await fetch(`/api/users?${params}`).then(r => r.json());
+  state.users = users;
+  renderUserList();
+}
+
+function filterUsers() { loadUsers(); }
+
+function renderUserList() {
+  const list = document.getElementById('userList');
+  if (!state.users.length) {
+    list.innerHTML = '<div class="loading" style="color:var(--text3)">No users found</div>';
+    return;
+  }
+  list.innerHTML = state.users.map(u => `
+    <div class="list-item ${state.selectedUser?._id === u._id ? 'selected' : ''}" onclick="selectUser('${u._id}')">
+      <div class="user-avatar">${u.username[0].toUpperCase()}</div>
+      <div class="item-body">
+        <div class="item-title">${u.username}</div>
+        <div class="item-meta">${u.email}</div>
+        <div class="item-meta" style="margin-top:3px">
+          <span class="badge badge-genre">${u.watch_history?.length || 0} watched</span>
+          <span style="color:var(--text3)">${fmtDate(u.created_at)}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function selectUser(id) {
+  const data = await fetch(`/api/users/${id}`).then(r => r.json());
+  state.selectedUser = data;
+  document.querySelectorAll('#userList .list-item').forEach(el => {
+    el.classList.toggle('selected', el.onclick.toString().includes(id));
+  });
+
+  const panel = document.getElementById('userDetail');
+  panel.innerHTML = `
+    <div class="detail-header" style="align-items:center">
+      <div class="user-avatar" style="width:64px;height:64px;font-size:24px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center">${data.username[0].toUpperCase()}</div>
+      <div class="detail-title-area">
+        <div class="detail-title">${data.username}</div>
+        <div class="detail-meta-row">
+          <span style="font-family:var(--mono);font-size:12px;color:var(--text2)">${data.email}</span>
+        </div>
+        <div class="detail-meta-row">
+          <span class="badge badge-year">Joined ${fmtDate(data.created_at)}</span>
+        </div>
+        <div class="detail-actions">
+          <button class="btn btn-primary btn-sm" onclick="openUserForm('${data._id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteUser('${data._id}')">Delete</button>
+        </div>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="section">
+        <div class="section-title">Watch History <span class="mongo-badge">embedded in user doc</span></div>
+        ${data.watch_history?.length ? `
+          <div class="history-list">
+            ${data.watch_history.map(h => `
+              <div class="history-item">
+                <span style="flex:1;font-size:12px;color:var(--text)">${h.movie_title || 'Unknown'}</span>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="history-progress"><div class="history-progress-fill" style="width:${h.progress_pct}%"></div></div>
+                  <span style="font-family:var(--mono);font-size:10px;color:var(--text3);min-width:30px">${h.progress_pct}%</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>` : '<p style="color:var(--text3);font-size:12px;font-family:var(--mono)">No watch history.</p>'}
+      </div>
+
+      ${data.ratings?.length ? `
+        <div class="section">
+          <div class="section-title">Ratings <span class="mongo-badge">ratings collection ref</span></div>
+          <div class="rating-list">
+            ${data.ratings.map(r => `
+              <div class="rating-item">
+                <div class="rating-score">${r.score}</div>
+                <div>
+                  <div class="rating-review">${r.movie_title || 'Unknown movie'}</div>
+                  ${r.review ? `<div class="rating-review" style="margin-top:2px;color:var(--text3)">"${r.review}"</div>` : ''}
+                  <div class="rating-date">${fmtDate(r.created_at)}</div>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+
+      <div class="section">
+        <div class="section-title">Document ID</div>
+        <code style="font-family:var(--mono);font-size:11px;color:var(--text3)">${data._id}</code>
+      </div>
+    </div>
+  `;
+}
+
+function openUserForm(id) {
+  if (id) {
+    const u = state.users.find(x => x._id === id) || state.selectedUser;
+    document.getElementById('userId').value = u._id;
+    document.getElementById('userUsername').value = u.username;
+    document.getElementById('userEmail').value = u.email;
+    document.getElementById('userModalTitle').textContent = 'Edit User';
+  } else {
+    document.getElementById('userId').value = '';
+    document.getElementById('userUsername').value = '';
+    document.getElementById('userEmail').value = '';
+    document.getElementById('userModalTitle').textContent = 'New User';
+  }
+  openModal('userModal');
+}
+
+async function saveUser() {
+  const id = document.getElementById('userId').value;
+  const body = {
+    username: document.getElementById('userUsername').value.trim(),
+    email: document.getElementById('userEmail').value.trim()
+  };
+  if (!body.username || !body.email) return toast('Username and email required', 'error');
+
+  const url = id ? `/api/users/${id}` : '/api/users';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+  if (res.ok) {
+    toast(id ? 'User updated' : 'User created');
+    closeModal('userModal');
+    await loadUsers();
+    if (id) selectUser(id);
+    loadStats();
+  } else {
+    const err = await res.json();
+    toast(err.error || 'Error saving', 'error');
+  }
+}
+
+async function deleteUser(id) {
+  if (!confirm('Delete this user? This will also delete their ratings.')) return;
+  const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    toast('User deleted');
+    state.selectedUser = null;
+    document.getElementById('userDetail').innerHTML = '<div class="detail-empty"><div class="big">👤</div><p>Select a user to view details</p></div>';
+    await loadUsers();
+    loadStats();
+  } else {
+    const err = await res.json();
+    toast(err.error || 'Error deleting', 'error');
+  }
+}
+
+// ═══════════════════════════════════════ INIT ═════════════════════════════════
+async function init() {
+  await Promise.all([loadStats(), loadMovies(), loadGenresForFilters(), loadGenres(), loadUsers()]);
+}
+
+init();
+</script>
+</body>
+</html>
